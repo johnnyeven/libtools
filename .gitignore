@@ -1,0 +1,10 @@
+*.log
+*.log.wf
+*.swp
+.tmp
+*.out
+.idea
+
+libtools
+!tools/
+tensorflow.tar.gz

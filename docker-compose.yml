@@ -1,0 +1,20 @@
+version: '2'
+
+services:
+  runtime:
+    build:
+      context: .
+      dockerfile: runtime.Dockerfile
+    image: ${G7PAY_DOCKER_REGISTRY}/g7/env-golang:latest
+  golang:
+    build:
+      context: .
+      dockerfile: golang.Dockerfile
+    image: ${G7PAY_DOCKER_REGISTRY}/g7/env-golang:golang
+  onbuild:
+    depends_on:
+      - golang
+    build:
+      context: .
+      dockerfile: onbuild.Dockerfile
+    image: ${G7PAY_DOCKER_REGISTRY}/g7/env-golang:onbuild
