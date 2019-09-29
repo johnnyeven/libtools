@@ -6,6 +6,8 @@ import (
 	"github.com/johnnyeven/libtools/conf"
 	"github.com/johnnyeven/libtools/courier/client"
 	"github.com/sirupsen/logrus"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"time"
 )
@@ -18,6 +20,7 @@ const (
 	DefaultPullInterval   = 60
 	DefaultStackName      = "profzone"
 	DefaultServiceName    = "service-configurations"
+	DefaultStoragePath    = "./config/raw_config"
 )
 
 type Agent struct {
@@ -27,6 +30,7 @@ type Agent struct {
 	Timeout            int64  `conf:"env"`
 	PullConfigInterval int64  `conf:"env"`
 	StackID            uint64 `conf:"env"`
+	StoragePath        string `conf:"env"`
 	client             *client_configurations.ClientConfigurations
 	config             interface{}
 	rawConfig          []RawConfig
@@ -48,6 +52,9 @@ func (a *Agent) MarshalDefaults(v interface{}) {
 		}
 		if a.PullConfigInterval == 0 {
 			a.PullConfigInterval = DefaultPullInterval
+		}
+		if a.StoragePath == "" {
+			a.StoragePath = DefaultStoragePath
 		}
 		if a.client == nil {
 			c := &client_configurations.ClientConfigurations{
@@ -72,6 +79,7 @@ func (a Agent) DockerDefaults() conf.DockerDefaults {
 		"Timeout":            DefaultRequestTimeout,
 		"PullConfigInterval": DefaultPullInterval,
 		"StackID":            0,
+		"StoragePath":        DefaultStoragePath,
 	}
 }
 
@@ -93,6 +101,15 @@ func (a *Agent) Start() {
 	}
 
 	a.getFistRunConfig()
+	go a.GetConfig()
+}
+
+func (a *Agent) GetConfig() {
+	ticker := time.NewTicker(time.Duration(a.PullConfigInterval) * time.Second)
+	for {
+		<- ticker.C
+		a.getFistRunConfig()
+	}
 }
 
 func (a *Agent) getFistRunConfig() {
@@ -103,13 +120,13 @@ func (a *Agent) getFistRunConfig() {
 		Size:    -1,
 	}
 	resp, err := a.client.GetConfigurations(request)
+	if err == nil {
+		result, err = json.Marshal(resp.Body.Data)
+		_ = a.saveConfigToFile(result)
+	}
+
 	if err != nil {
 		result, err = a.loadConfigFromFile()
-	} else {
-		result, err = json.Marshal(resp.Body.Data)
-		if err != nil {
-			result, err = a.loadConfigFromFile()
-		}
 	}
 
 	if err != nil {
@@ -138,5 +155,9 @@ func (a *Agent) getFistRunConfig() {
 }
 
 func (a *Agent) loadConfigFromFile() ([]byte, error) {
-	return nil, nil
+	return ioutil.ReadFile(a.StoragePath)
+}
+
+func (a *Agent) saveConfigToFile(raw []byte) error {
+	return ioutil.WriteFile(a.StoragePath, raw, os.ModePerm)
 }
