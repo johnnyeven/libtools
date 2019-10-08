@@ -45,7 +45,7 @@ func (b *MessageBus) Init() {
 func (b *MessageBus) RegisterHandler(key, matcher string, handlerFunc func(e *bus.Event)) () {
 	handler := bus.Handler{
 		Handle:  handlerFunc,
-		Matcher: "",
+		Matcher: matcher,
 	}
 
 	bus.RegisterHandler(key, &handler)
