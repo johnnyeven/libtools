@@ -233,6 +233,8 @@ func (a *Agent) diffConfig(current map[string]string) (diff map[string]DiffConfi
 			}
 		}
 	}
+
+	return
 }
 
 func (a *Agent) loadConfigFromService() ([]byte, error) {
