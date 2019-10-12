@@ -1,30 +1,13 @@
 package bus
 
 import (
-	"github.com/johnnyeven/libtools/conf"
 	"github.com/mustafaturan/bus"
 	"github.com/mustafaturan/monoton"
 	"github.com/mustafaturan/monoton/sequencer"
 	"github.com/sirupsen/logrus"
 )
 
-type MessageBus struct {
-	RegisterTopics []string `conf:"env"`
-}
-
-func (*MessageBus) DockerDefaults() conf.DockerDefaults {
-	return conf.DockerDefaults{
-		"RegisterTopics": "",
-	}
-}
-
-func (*MessageBus) MarshalDefaults(v interface{}) {
-	if cl, ok := v.(*MessageBus); ok {
-		if len(cl.RegisterTopics) == 0 {
-			logrus.Panicf("[MessageBus] MarshalDefaults err: RegisterTopics should not be empty")
-		}
-	}
-}
+type MessageBus struct {}
 
 func (b *MessageBus) Init() {
 	// configure id generator (it doesn't have to be monoton)
@@ -38,8 +21,10 @@ func (b *MessageBus) Init() {
 	if err := bus.Configure(bus.Config{Next: monoton.Next}); err != nil {
 		logrus.Panicf("[MessageBus] bus.Configure err: %v", err)
 	}
+}
 
-	bus.RegisterTopics(b.RegisterTopics...)
+func (b *MessageBus) RegisterTopic(topicNames ...string) {
+	bus.RegisterTopics(topicNames...)
 }
 
 func (b *MessageBus) RegisterHandler(key, matcher string, handlerFunc func(e *bus.Event)) () {
