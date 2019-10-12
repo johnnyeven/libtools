@@ -112,6 +112,9 @@ func (a *Agent) Start() {
 	if a.config == nil {
 		panic("conf is not bind, please use BindConf to bind a configuration entry first.")
 	}
+	if a.bus == nil {
+		panic("bus is not bind, please use BindBus to bind a MessageBus entry first.")
+	}
 
 	a.getFistRunConfig()
 	a.runtimeConfig()
