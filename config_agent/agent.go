@@ -2,6 +2,7 @@ package config_agent
 
 import (
 	"encoding/json"
+	"github.com/johnnyeven/libtools/bus"
 	"github.com/johnnyeven/libtools/clients/client_configurations"
 	"github.com/johnnyeven/libtools/conf"
 	"github.com/johnnyeven/libtools/courier/client"
@@ -23,6 +24,8 @@ const (
 	DefaultStackName      = "profzone"
 	DefaultServiceName    = "service-configurations"
 	DefaultStoragePath    = "./config/raw_config"
+
+	DiffConfigTopic = "diff-config"
 )
 
 type Agent struct {
@@ -33,9 +36,11 @@ type Agent struct {
 	PullConfigInterval int64  `conf:"env"`
 	StackID            uint64 `conf:"env"`
 	StoragePath        string `conf:"env"`
+	bus                *bus.MessageBus
 	client             *client_configurations.ClientConfigurations
 	config             interface{}
 	rawConfig          []RawConfig
+	configMap          map[string]string
 }
 
 func (a *Agent) MarshalDefaults(v interface{}) {
@@ -87,6 +92,8 @@ func (a Agent) DockerDefaults() conf.DockerDefaults {
 
 func (a *Agent) Init() {
 	a.client.Init()
+	a.rawConfig = make([]RawConfig, 0)
+	a.configMap = make(map[string]string)
 }
 
 func (a *Agent) BindConf(conf interface{}) {
@@ -95,6 +102,10 @@ func (a *Agent) BindConf(conf interface{}) {
 		panic("the conf to be bind is not pointer.")
 	}
 	a.config = conf
+}
+
+func (a *Agent) BindBus(bus *bus.MessageBus) {
+	a.bus = bus
 }
 
 func (a *Agent) Start() {
@@ -142,12 +153,11 @@ func (a *Agent) getFistRunConfig() {
 		logrus.Panicf("unmarshal raw configuration err: %v", err)
 	}
 
-	configMap := make(map[string]string)
 	for _, config := range a.rawConfig {
-		configMap[config.Key] = config.Value
+		a.configMap[config.Key] = config.Value
 	}
 
-	jsonConfig, err := json.Marshal(configMap)
+	jsonConfig, err := json.Marshal(a.configMap)
 	if err != nil {
 		logrus.Panicf("marshal raw configuration err: %v", err)
 	}
@@ -178,12 +188,12 @@ func (a *Agent) getRuntimeConfig() {
 		logrus.Panicf("unmarshal raw configuration err: %v", err)
 	}
 
-	configMap := make(map[string]string)
+	currentConfigMap := make(map[string]string)
 	for _, config := range a.rawConfig {
-		configMap[config.Key] = config.Value
+		currentConfigMap[config.Key] = config.Value
 	}
 
-	jsonConfig, err := json.Marshal(configMap)
+	jsonConfig, err := json.Marshal(currentConfigMap)
 	if err != nil {
 		logrus.Panicf("marshal raw configuration err: %v", err)
 	}
@@ -191,6 +201,34 @@ func (a *Agent) getRuntimeConfig() {
 	err = json.Unmarshal(jsonConfig, a.config)
 	if err != nil {
 		logrus.Panicf("unmarshal configuration err: %v", err)
+	}
+
+	diff := a.diffConfig(currentConfigMap)
+	for _, v := range diff {
+		a.bus.Emit(DiffConfigTopic, v, "")
+	}
+}
+
+func (a *Agent) diffConfig(current map[string]string) (diff map[string]DiffConfig) {
+	diff = make(map[string]DiffConfig)
+	for key, val := range current {
+		if v, ok := a.configMap[key]; ok {
+			if v != val {
+				// 存在key但是值发生改变
+				diff[key] = DiffConfig{
+					Key:   key,
+					Value: val,
+					Tag:   false,
+				}
+			}
+		} else {
+			// 不存在key
+			diff[key] = DiffConfig{
+				Key:   key,
+				Value: val,
+				Tag:   true,
+			}
+		}
 	}
 }
 
@@ -212,4 +250,10 @@ func (a *Agent) loadConfigFromFile() ([]byte, error) {
 
 func (a *Agent) saveConfigToFile(raw []byte) error {
 	return ioutil.WriteFile(a.StoragePath, raw, os.ModePerm)
+}
+
+type DiffConfig struct {
+	Key   string
+	Value string
+	Tag   bool
 }
