@@ -8,7 +8,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"reflect"
+	"syscall"
 	"time"
 )
 
@@ -101,31 +103,33 @@ func (a *Agent) Start() {
 	}
 
 	a.getFistRunConfig()
-	go a.GetConfig()
+	a.runtimeConfig()
 }
 
-func (a *Agent) GetConfig() {
+func (a *Agent) runtimeConfig() {
 	ticker := time.NewTicker(time.Duration(a.PullConfigInterval) * time.Second)
+	quit := make(chan os.Signal)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR2)
+
+Run:
 	for {
-		<- ticker.C
-		a.getFistRunConfig()
+		select {
+		case <-ticker.C:
+			a.getRuntimeConfig()
+		case <-quit:
+			break Run
+		}
 	}
 }
 
 func (a *Agent) getFistRunConfig() {
 	var result []byte
 	var err error
-	request := client_configurations.GetConfigurationsRequest{
-		StackID: a.StackID,
-		Size:    -1,
-	}
-	resp, err := a.client.GetConfigurations(request)
-	if err == nil {
-		result, err = json.Marshal(resp.Body.Data)
-		_ = a.saveConfigToFile(result)
-	}
 
-	if err != nil {
+	result, err = a.loadConfigFromService()
+	if err == nil {
+		_ = a.saveConfigToFile(result)
+	} else {
 		result, err = a.loadConfigFromFile()
 	}
 
@@ -148,10 +152,58 @@ func (a *Agent) getFistRunConfig() {
 		logrus.Panicf("marshal raw configuration err: %v", err)
 	}
 
-	err = json.Unmarshal(jsonConfig, &a.config)
+	err = json.Unmarshal(jsonConfig, a.config)
 	if err != nil {
 		logrus.Panicf("unmarshal configuration err: %v", err)
 	}
+}
+
+func (a *Agent) getRuntimeConfig() {
+	var result []byte
+	var err error
+
+	result, err = a.loadConfigFromService()
+	if err == nil {
+		_ = a.saveConfigToFile(result)
+	} else {
+		result, err = a.loadConfigFromFile()
+	}
+
+	if err != nil {
+		logrus.Panicf("load configuration failed, neither remote or local. err: %v", err)
+	}
+
+	err = json.Unmarshal(result, &a.rawConfig)
+	if err != nil {
+		logrus.Panicf("unmarshal raw configuration err: %v", err)
+	}
+
+	configMap := make(map[string]string)
+	for _, config := range a.rawConfig {
+		configMap[config.Key] = config.Value
+	}
+
+	jsonConfig, err := json.Marshal(configMap)
+	if err != nil {
+		logrus.Panicf("marshal raw configuration err: %v", err)
+	}
+
+	err = json.Unmarshal(jsonConfig, a.config)
+	if err != nil {
+		logrus.Panicf("unmarshal configuration err: %v", err)
+	}
+}
+
+func (a *Agent) loadConfigFromService() ([]byte, error) {
+	request := client_configurations.GetConfigurationsRequest{
+		StackID: a.StackID,
+		Size:    -1,
+	}
+	resp, err := a.client.GetConfigurations(request)
+	if err == nil {
+		return json.Marshal(resp.Body.Data)
+	}
+	return nil, err
 }
 
 func (a *Agent) loadConfigFromFile() ([]byte, error) {
