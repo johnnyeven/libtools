@@ -116,6 +116,8 @@ func (a *Agent) Start() {
 		panic("bus is not bind, please use BindBus to bind a MessageBus entry first.")
 	}
 
+	a.bus.RegisterTopic(DiffConfigTopic)
+
 	a.getFistRunConfig()
 	a.runtimeConfig()
 }
