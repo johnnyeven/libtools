@@ -211,6 +211,7 @@ func (a *Agent) getRuntimeConfig() {
 	diff := a.diffConfig(currentConfigMap)
 	for _, v := range diff {
 		a.bus.Emit(DiffConfigTopic, v, "")
+		a.configMap[v.Key] = v.Value
 	}
 }
 
