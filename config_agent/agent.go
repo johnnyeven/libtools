@@ -91,7 +91,6 @@ func (a Agent) DockerDefaults() conf.DockerDefaults {
 }
 
 func (a *Agent) Init() {
-	a.client.Init()
 	a.rawConfig = make([]RawConfig, 0)
 	a.configMap = make(map[string]string)
 }
