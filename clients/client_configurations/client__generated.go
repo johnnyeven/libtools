@@ -25,10 +25,6 @@ func (ClientConfigurations) MarshalDefaults(v interface{}) {
 	}
 }
 
-func (c ClientConfigurations) Init() {
-	c.CheckService()
-}
-
 func (c ClientConfigurations) CheckService() {
 	err := c.Request(c.Name+".Check", "HEAD", "/", nil).
 		Do().
