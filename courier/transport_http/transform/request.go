@@ -104,6 +104,9 @@ func NewHttpRequestFromParameterGroup(method string, uri string, m *ParameterGro
 			}
 		}
 	}
+	if multipartWriter != nil {
+		multipartWriter.Close()
+	}
 
 	u, errForParseUrl := url.Parse(uri)
 	if errForParseUrl != nil {
@@ -191,7 +194,6 @@ func NewHttpRequestFromParameterGroup(method string, uri string, m *ParameterGro
 	if m.FormData.Len() > 0 {
 		if multipartWriter != nil {
 			req.Header.Add(httpx.HeaderContentType, multipartWriter.FormDataContentType())
-			multipartWriter.Close()
 		} else {
 			req.Header.Add(httpx.HeaderContentType, httpx.MIMEPOSTForm+"; param=value")
 		}
